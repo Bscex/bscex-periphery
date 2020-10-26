@@ -1,7 +1,7 @@
 pragma solidity =0.6.6;
 
-import '@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol';
-import '@uniswap/lib/contracts/libraries/TransferHelper.sol';
+import '@bscex/core/contracts/interfaces/IUniswapV2Factory.sol';
+import '@bscex/lib/contracts/libraries/TransferHelper.sol';
 
 import './interfaces/IUniswapV2Router02.sol';
 import './libraries/UniswapV2Library.sol';
@@ -14,6 +14,8 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
 
     address public immutable override factory;
     address public immutable override WETH;
+    mapping(address => uint) public tokenSellFee;
+    mapping(address => bool) public isTokenSellFee;
 
     modifier ensure(uint deadline) {
         require(deadline >= block.timestamp, 'UniswapV2Router: EXPIRED');
@@ -27,6 +29,25 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
 
     receive() external payable {
         assert(msg.sender == WETH); // only accept ETH via fallback from the WETH contract
+    }
+
+    function setTokenSellFee(
+        address tokenSell,
+        uint fee
+    ) public returns(bool) {
+        require(msg.sender == IUniswapV2Factory(factory).feeToSetter(), "Only Owner can set tokenSellFee");
+        isTokenSellFee[tokenSell] = true;
+        tokenSellFee[tokenSell] = fee;
+        return true;
+    }
+
+    function deleteTokenSellFee(
+        address tokenSell
+    ) public returns(bool) {
+        require(msg.sender == IUniswapV2Factory(factory).feeToSetter(),  "Only Owner can set deleteTokenSellFee");
+        delete isTokenSellFee[tokenSell];
+        delete tokenSellFee[tokenSell];
+        return true;
     }
 
     // **** ADD LIQUIDITY ****
@@ -228,6 +249,10 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
         address to,
         uint deadline
     ) external virtual override ensure(deadline) returns (uint[] memory amounts) {
+        if (isTokenSellFee[path[0]]) {
+            uint tokenFee = UniswapV2Library.getFeeTokenSell(amountIn, tokenSellFee[path[0]]);
+            TransferHelper.safeBurnFrom(path[0], msg.sender, tokenFee);
+        }
         amounts = UniswapV2Library.getAmountsOut(factory, amountIn, path);
         require(amounts[amounts.length - 1] >= amountOutMin, 'UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT');
         TransferHelper.safeTransferFrom(
@@ -243,6 +268,10 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
         uint deadline
     ) external virtual override ensure(deadline) returns (uint[] memory amounts) {
         amounts = UniswapV2Library.getAmountsIn(factory, amountOut, path);
+        if (isTokenSellFee[path[0]]) {
+            uint tokenFee = UniswapV2Library.getFeeTokenSell(amounts[0], tokenSellFee[path[0]]);
+            TransferHelper.safeBurnFrom(path[0], msg.sender, tokenFee);
+        }
         require(amounts[0] <= amountInMax, 'UniswapV2Router: EXCESSIVE_INPUT_AMOUNT');
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, UniswapV2Library.pairFor(factory, path[0], path[1]), amounts[0]
@@ -273,6 +302,10 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
     {
         require(path[path.length - 1] == WETH, 'UniswapV2Router: INVALID_PATH');
         amounts = UniswapV2Library.getAmountsIn(factory, amountOut, path);
+        if (isTokenSellFee[path[0]]) {
+            uint tokenFee = UniswapV2Library.getFeeTokenSell(amounts[0], tokenSellFee[path[0]]);
+            TransferHelper.safeBurnFrom(path[0], msg.sender, tokenFee);
+        }
         require(amounts[0] <= amountInMax, 'UniswapV2Router: EXCESSIVE_INPUT_AMOUNT');
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, UniswapV2Library.pairFor(factory, path[0], path[1]), amounts[0]
@@ -289,6 +322,10 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
         returns (uint[] memory amounts)
     {
         require(path[path.length - 1] == WETH, 'UniswapV2Router: INVALID_PATH');
+        if (isTokenSellFee[path[0]]) {
+            uint tokenFee = UniswapV2Library.getFeeTokenSell(amountIn, tokenSellFee[path[0]]);
+            TransferHelper.safeBurnFrom(path[0], msg.sender, tokenFee);
+        }
         amounts = UniswapV2Library.getAmountsOut(factory, amountIn, path);
         require(amounts[amounts.length - 1] >= amountOutMin, 'UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT');
         TransferHelper.safeTransferFrom(
@@ -343,6 +380,10 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
         address to,
         uint deadline
     ) external virtual override ensure(deadline) {
+        if (isTokenSellFee[path[0]]) {
+            uint tokenFee = UniswapV2Library.getFeeTokenSell(amountIn, tokenSellFee[path[0]]);
+            TransferHelper.safeBurnFrom(path[0], msg.sender, tokenFee);
+        }
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, UniswapV2Library.pairFor(factory, path[0], path[1]), amountIn
         );
@@ -389,6 +430,10 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
         ensure(deadline)
     {
         require(path[path.length - 1] == WETH, 'UniswapV2Router: INVALID_PATH');
+        if (isTokenSellFee[path[0]]) {
+            uint tokenFee = UniswapV2Library.getFeeTokenSell(amountIn, tokenSellFee[path[0]]);
+            TransferHelper.safeBurnFrom(path[0], msg.sender, tokenFee);
+        }
         TransferHelper.safeTransferFrom(
             path[0], msg.sender, UniswapV2Library.pairFor(factory, path[0], path[1]), amountIn
         );
@@ -442,5 +487,15 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
         returns (uint[] memory amounts)
     {
         return UniswapV2Library.getAmountsIn(factory, amountOut, path);
+    }
+
+    function getAmountBurnTokenFee(address token, uint amount)
+        public
+        view
+        virtual
+        returns (uint feeBurn)
+    {
+        require(isTokenSellFee[token], "TOKEN NOT SET FEE");
+        feeBurn = UniswapV2Library.getFeeTokenSell(amount, tokenSellFee[token]);
     }
 }
