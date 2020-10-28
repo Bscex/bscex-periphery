@@ -34,7 +34,7 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
     function setTokenSellFee(
         address tokenSell,
         uint fee
-    ) public returns(bool) {
+    ) public virtual override returns(bool) {
         require(msg.sender == IUniswapV2Factory(factory).feeToSetter(), "Only Owner can set tokenSellFee");
         isTokenSellFee[tokenSell] = true;
         tokenSellFee[tokenSell] = fee;
@@ -43,7 +43,7 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
 
     function deleteTokenSellFee(
         address tokenSell
-    ) public returns(bool) {
+    ) public virtual override returns(bool) {
         require(msg.sender == IUniswapV2Factory(factory).feeToSetter(),  "Only Owner can set deleteTokenSellFee");
         delete isTokenSellFee[tokenSell];
         delete tokenSellFee[tokenSell];
@@ -493,9 +493,13 @@ contract UniswapV2Router02 is IUniswapV2Router02 {
         public
         view
         virtual
+        override
         returns (uint feeBurn)
     {
-        require(isTokenSellFee[token], "TOKEN NOT SET FEE");
-        feeBurn = UniswapV2Library.getFeeTokenSell(amount, tokenSellFee[token]);
+        if (isTokenSellFee[token]) {
+            feeBurn = UniswapV2Library.getFeeTokenSell(amount, tokenSellFee[token]);
+        } else {
+            feeBurn = 0;
+        }
     }
 }

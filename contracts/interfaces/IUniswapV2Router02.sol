@@ -41,4 +41,15 @@ interface IUniswapV2Router02 is IUniswapV2Router01 {
         address to,
         uint deadline
     ) external;
+    function setTokenSellFee(
+        address tokenSell,
+        uint fee
+    ) external returns (bool);
+    function deleteTokenSellFee(
+        address tokenSell
+    ) external returns (bool);
+    function getAmountBurnTokenFee(
+        address token,
+        uint amount
+    ) external view returns (uint feeBurn);
 }
