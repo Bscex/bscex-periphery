@@ -80,7 +80,7 @@ library UniswapV2Library {
     }
 
     // get fee for token fee
-    function getFeeTokenSell(uint amount, uint tokenFee) internal pure returns (uint fee) {
+    function getTokenSellFee(uint amount, uint tokenFee) internal pure returns (uint fee) {
         require(amount > 0 && tokenFee > 0, 'UniswapV2Library: INVALID_GET_FEE');
         fee = amount.sub(amount.mul(tokenFee) / 1000);
     }
